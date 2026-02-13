@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フヤセル営業集計</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
+        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
+        .bar-container { background-color: #e5e7eb; border-radius: 9999px; height: 8px; width: 100%; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 9999px; transition: width 0.5s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen p-6">
+
+    <div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-8">
+        <!-- Header -->
+        <div class="border-b pb-4 mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-trophy text-yellow-500 mr-2"></i>フヤセル営業集計</h1>
+            </div>
+            <!-- クレジット表記削除済み -->
+        </div>
+
+        <!-- Configuration -->
+        <div class="bg-gray-100 rounded-lg p-4 mb-6">
+            <h3 class="font-bold text-sm text-gray-700 mb-3"><i class="fa-solid fa-gear mr-1"></i>設定 (Excelの列アルファベット)</h3>
+            <div class="grid grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">入金日/決済日</label>
+                    <input type="text" id="colDate" value="P" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: P">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">状態 (決済完了)</label>
+                    <input type="text" id="colStatus" value="Q" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: Q">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">備考 (分割数)</label>
+                    <input type="text" id="colNote" value="R" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: R">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">担当者名</label>
+                    <input type="text" id="colName" value="X" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: X">
+                </div>
+            </div>
+            <div class="mt-3 flex items-center gap-4">
+                 <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">文字コード</label>
+                    <select id="encoding" class="border rounded px-3 py-2 text-sm bg-white">
+                        <option value="Shift_JIS">Shift_JIS (Excel標準)</option>
+                        <option value="UTF-8">UTF-8 (Google Sheetsなど)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Upload Area -->
+        <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer transition-colors duration-200 hover:border-blue-400 hover:bg-gray-50 mb-6">
+            <i class="fa-solid fa-file-csv text-3xl text-gray-400 mb-2"></i>
+            <p class="text-gray-600 font-medium text-sm">CSVファイルをドラッグ＆ドロップ</p>
+            <input type="file" id="file-input" class="hidden" accept=".csv">
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-msg" class="hidden mb-6 p-3 bg-red-100 text-red-700 text-sm rounded border border-red-200"></div>
+
+        <!-- Control Area (Hidden until file loaded) -->
+        <div id="control-area" class="hidden mb-6 flex flex-wrap items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-100">
+            <div class="flex items-center gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-blue-800 mb-1">集計期間を選択</label>
+                    <select id="month-select" class="border border-blue-300 rounded px-4 py-2 text-sm bg-white font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="pl-6 border-l border-blue-200">
+                    <p class="text-xs text-blue-600 font-bold uppercase">Total Sales</p>
+                    <p class="text-2xl font-black text-blue-900" id="total-count">0 <span class="text-sm font-normal text-blue-600">本</span></p>
+                </div>
+            </div>
+            <button onclick="copyTable()" class="text-sm bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded font-medium transition shadow-sm">
+                <i class="fa-regular fa-copy mr-1"></i> 結果をコピー
+            </button>
+        </div>
+
+        <!-- Results Area -->
+        <div id="result-area" class="hidden">
+            <div class="overflow-hidden border rounded-lg shadow-sm">
+                <table class="min-w-full bg-white divide-y divide-gray-200" id="result-table">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Rank</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">担当者</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">獲得シェア (件数)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">備考 (インセンティブ対象)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                        <!-- Javascript will populate this -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const controlArea = document.getElementById('control-area');
+        const monthSelect = document.getElementById('month-select');
+        const totalCountDisplay = document.getElementById('total-count');
+        const resultArea = document.getElementById('result-area');
+        const resultTableBody = document.querySelector('#result-table tbody');
+        const errorMsg = document.getElementById('error-msg');
+
+        // Global Data Store
+        let globalRawData = [];
+        let globalConfig = {};
+
+        // Helper: Excel Column to Index
+        function colLetterToIndex(letter) {
+            let column = 0;
+            let length = letter.length;
+            for (let i = 0; i < length; i++) {
+                column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+            }
+            return column - 1;
+        }
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active')); 
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.classList.remove('drag-active');
+            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length) processFile(e.target.files[0]); });
+
+        // Month Selection Change
+        monthSelect.addEventListener('change', () => {
+            updateDashboard(monthSelect.value);
+        });
+
+        // 1. Process File
+        function processFile(file) {
+            errorMsg.classList.add('hidden');
+            resultArea.classList.add('hidden');
+            controlArea.classList.add('hidden');
+
+            // Save Config
+            globalConfig = {
+                dateIdx: colLetterToIndex(document.getElementById('colDate').value.toUpperCase().trim()),
+                statusIdx: colLetterToIndex(document.getElementById('colStatus').value.toUpperCase().trim()),
+                noteIdx: colLetterToIndex(document.getElementById('colNote').value.toUpperCase().trim()),
+                nameIdx: colLetterToIndex(document.getElementById('colName').value.toUpperCase().trim())
+            };
+
+            const encoding = document.getElementById('encoding').value;
+
+            Papa.parse(file, {
+                encoding: encoding,
+                complete: function(results) {
+                    initData(results.data);
+                },
+                error: function(err) {
+                    showError("CSV読み込みエラー: " + err.message);
+                }
+            });
+        }
+
+        // 2. Initialize Data & Extract Months
+        function initData(data) {
+            globalRawData = data;
+            const months = new Set();
+            let hasValidData = false;
+
+            // First pass: Collect all available YYYY/MM
+            data.forEach(row => {
+                if (row.length <= Math.max(globalConfig.statusIdx, globalConfig.dateIdx)) return;
+                
+                const status = (row[globalConfig.statusIdx] || '').toString();
+                if (!status.includes('決済完了')) return; // Only care about closed deals
+
+                const dateStr = (row[globalConfig.dateIdx] || '').toString().trim();
+                // Parse date: Try "2026/01/28" or "1月26日"
+                let dateObj = parseDate(dateStr);
+                
+                if (dateObj) {
+                    const monthKey = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月`;
+                    months.add(monthKey);
+                    hasValidData = true;
+                }
+            });
+
+            if (!hasValidData) {
+                showError("「決済完了」かつ「日付」が読み取れるデータが見つかりませんでした。日付列（デフォルトP列）の設定を確認してください。");
+                return;
+            }
+
+            // Populate Select Box
+            monthSelect.innerHTML = '<option value="all">全期間</option>';
+            // Sort months reverse chronological
+            Array.from(months).sort((a, b) => {
+                const [yA, mA] = a.match(/\d+/g).map(Number);
+                const [yB, mB] = b.match(/\d+/g).map(Number);
+                return (yB * 100 + mB) - (yA * 100 + mA);
+            }).forEach(m => {
+                const option = document.createElement('option');
+                option.value = m;
+                option.textContent = m;
+                monthSelect.appendChild(option);
+            });
+
+            controlArea.classList.remove('hidden');
+            
+            // Auto-select the most recent month if available
+            if (monthSelect.options.length > 1) {
+                monthSelect.selectedIndex = 1;
+            }
+            updateDashboard(monthSelect.value);
+        }
+
+        // Helper: Flexible Date Parser
+        function parseDate(str) {
+            if (!str) return null;
+            // 1. Try standard "YYYY/MM/DD" or "YYYY-MM-DD"
+            let match = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+            if (match) return new Date(match[1], match[2] - 1, match[3]);
+            
+            // 2. Try "1月26日" (Assume current year or check nearby columns - simplified to current year for now)
+            // If the user's CSV has YYYY in another column, this might need adjustment.
+            // For now, let's assume P列 has "2026/01/28" format as seen in screenshot.
+            return null; 
+        }
+
+        // 3. Filter & Analyze for Dashboard
+        function updateDashboard(selectedMonth) {
+            const counts = {};
+            let total = 0;
+
+            globalRawData.forEach(row => {
+                // Basic validation
+                if (row.length <= Math.max(globalConfig.statusIdx, globalConfig.dateIdx, globalConfig.nameIdx)) return;
+
+                const status = (row[globalConfig.statusIdx] || '').toString();
+                if (!status.includes('決済完了')) return;
+
+                const name = (row[globalConfig.nameIdx] || '').toString().trim();
+                if (!name) return;
+
+                // Date Filtering
+                if (selectedMonth !== 'all') {
+                    const dateStr = (row[globalConfig.dateIdx] || '').toString().trim();
+                    const dateObj = parseDate(dateStr);
+                    if (!dateObj) return; // Skip if date invalid
+                    const monthKey = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月`;
+                    if (monthKey !== selectedMonth) return;
+                }
+
+                // Initialize if new name
+                if (!counts[name]) {
+                    counts[name] = { count: 0, highSplits: [] };
+                }
+
+                // Increment
+                counts[name].count++;
+                total++;
+
+                // Check Remarks for Splits
+                const note = (row[globalConfig.noteIdx] || '').toString();
+                const splitMatch = note.match(/(\d+)分割/);
+                if (splitMatch) {
+                    const splitCount = parseInt(splitMatch[1], 10);
+                    if (splitCount >= 24) {
+                        counts[name].highSplits.push(`${splitCount}分割`);
+                    }
+                }
+            });
+
+            totalCountDisplay.innerHTML = `${total} <span class="text-sm font-normal text-blue-600">本</span>`;
+            renderTable(counts, total);
+        }
+
+        function renderTable(counts, total) {
+            resultTableBody.innerHTML = '';
+            
+            // Sort by count desc
+            const sortedData = Object.entries(counts)
+                .map(([name, data]) => ({ name, ...data }))
+                .sort((a, b) => b.count - a.count);
+
+            let rank = 1;
+            sortedData.forEach(item => {
+                const percentage = total > 0 ? ((item.count / total) * 100).toFixed(1) : 0;
+                const tr = document.createElement('tr');
+                
+                // Remarks Formatting
+                let remarksHtml = '<span class="text-gray-400 text-xs">-</span>';
+                if (item.highSplits.length > 0) {
+                    const splitSummary = item.highSplits.reduce((acc, curr) => {
+                        acc[curr] = (acc[curr] || 0) + 1;
+                        return acc;
+                    }, {});
+                    const parts = [];
+                    for (const [splitType, count] of Object.entries(splitSummary)) {
+                        parts.push(`${splitType}(${count})`);
+                    }
+                    remarksHtml = `<span class="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded inline-block">内: ${parts.join(', ')}</span>`;
+                }
+
+                // Rank Icon
+                let rankDisplay = `<span class="text-gray-500 font-mono">#${rank}</span>`;
+                if (rank === 1) rankDisplay = `<i class="fa-solid fa-crown text-yellow-500 text-lg"></i>`;
+                if (rank === 2) rankDisplay = `<i class="fa-solid fa-crown text-gray-400 text-lg"></i>`;
+                if (rank === 3) rankDisplay = `<i class="fa-solid fa-crown text-orange-400 text-lg"></i>`;
+
+                // Bar Color Logic
+                let barColor = 'bg-blue-500';
+                if (rank === 1) barColor = 'bg-yellow-400';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-center font-bold">${rankDisplay}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900 text-base">${item.name}</td>
+                    <td class="px-6 py-4 align-middle">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-lg font-bold text-gray-800">${item.count}本</span>
+                            <span class="text-xs font-bold text-gray-500">${percentage}%</span>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill ${barColor}" style="width: ${percentage}%"></div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">${remarksHtml}</td>
+                `;
+                resultTableBody.appendChild(tr);
+                rank++;
+            });
+
+            resultArea.classList.remove('hidden');
+        }
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.classList.remove('hidden');
+        }
+
+        function copyTable() {
+            const range = document.createRange();
+            range.selectNode(document.getElementById('result-table'));
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+            alert('結果をコピーしました！');
+        }
+    </script>
+</body>
+</html>
