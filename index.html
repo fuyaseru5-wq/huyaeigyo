@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>フヤセル営業集計 (Ver.2.0)</title>
+    <title>フヤセル営業集計 Ver.3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
-        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
         .bar-container { background-color: #e5e7eb; border-radius: 9999px; height: 8px; width: 100%; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 9999px; transition: width 0.5s ease-in-out; }
+        /* ローディングアニメーション */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen p-6">
@@ -19,45 +20,38 @@
     <div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-8">
         <div class="border-b pb-4 mb-6 flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-trophy text-yellow-500 mr-2"></i>フヤセル営業集計 <span class="text-sm font-normal text-gray-400">Ver.2.0</span></h1>
+                <h1 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-bolt text-yellow-500 mr-2"></i>フヤセル営業集計 <span class="text-sm font-normal text-gray-400">Ver.3.0 (直結版)</span></h1>
             </div>
         </div>
 
         <div class="bg-gray-100 rounded-lg p-4 mb-6">
-            <h3 class="font-bold text-sm text-gray-700 mb-3"><i class="fa-solid fa-gear mr-1"></i>設定 (自動保存されます)</h3>
+            <h3 class="font-bold text-sm text-gray-700 mb-3"><i class="fa-solid fa-gear mr-1"></i>設定 (列アルファベット)</h3>
             <div class="grid grid-cols-4 gap-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">入金日/決済日</label>
-                    <input type="text" id="colDate" value="P" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: P">
+                    <input type="text" id="colDate" value="P" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">状態 (決済完了)</label>
-                    <input type="text" id="colStatus" value="Q" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: Q">
+                    <input type="text" id="colStatus" value="Q" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">備考 (分割数)</label>
-                    <input type="text" id="colNote" value="R" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: R">
+                    <input type="text" id="colNote" value="R" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-600 mb-1">担当者名</label>
-                    <input type="text" id="colName" value="X" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: X">
-                </div>
-            </div>
-            <div class="mt-3 flex items-center gap-4">
-                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">文字コード</label>
-                    <select id="encoding" class="border rounded px-3 py-2 text-sm bg-white">
-                        <option value="Shift_JIS">Shift_JIS (Excel標準)</option>
-                        <option value="UTF-8">UTF-8 (Google Sheetsなど)</option>
-                    </select>
+                    <input type="text" id="colName" value="X" class="w-full border rounded px-3 py-2 text-center uppercase font-mono focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
             </div>
         </div>
 
-        <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer transition-colors duration-200 hover:border-blue-400 hover:bg-gray-50 mb-6">
-            <i class="fa-solid fa-file-csv text-3xl text-gray-400 mb-2"></i>
-            <p class="text-gray-600 font-medium text-sm">CSVファイルをドラッグ＆ドロップ</p>
-            <input type="file" id="file-input" class="hidden" accept=".csv">
+        <div id="action-area" class="text-center mb-8">
+            <button onclick="loadFromSheet()" id="load-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transition transform hover:-translate-y-1 flex items-center justify-center mx-auto gap-3 text-lg">
+                <i class="fa-solid fa-database"></i> シートからデータを読み込む
+            </button>
+            <div id="loader" class="loader mx-auto mt-4"></div>
+            <p id="status-msg" class="text-sm text-gray-500 mt-2 h-5"></p>
         </div>
 
         <div id="error-msg" class="hidden mb-6 p-3 bg-red-100 text-red-700 text-sm rounded border border-red-200"></div>
@@ -65,7 +59,7 @@
         <div id="control-area" class="hidden mb-6 flex flex-wrap items-center justify-between bg-blue-50 p-4 rounded-lg border border-blue-100">
             <div class="flex items-center gap-4">
                 <div>
-                    <label class="block text-xs font-bold text-blue-800 mb-1">集計期間を選択</label>
+                    <label class="block text-xs font-bold text-blue-800 mb-1">集計期間</label>
                     <select id="month-select" class="border border-blue-300 rounded px-4 py-2 text-sm bg-white font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </select>
                 </div>
@@ -98,12 +92,12 @@
     </div>
 
     <script>
-        // --- 設定＆保存機能 ---
-        const STORAGE_KEY = 'fuyaseru_config_v2'; // キー名を変更
+        const STORAGE_KEY = 'fuyaseru_config_v3';
         
         // DOM Elements
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
+        const loadBtn = document.getElementById('load-btn');
+        const loader = document.getElementById('loader');
+        const statusMsg = document.getElementById('status-msg');
         const controlArea = document.getElementById('control-area');
         const monthSelect = document.getElementById('month-select');
         const totalCountDisplay = document.getElementById('total-count');
@@ -111,23 +105,15 @@
         const resultTableBody = document.querySelector('#result-table tbody');
         const errorMsg = document.getElementById('error-msg');
 
-        // Inputs
-        const inputIds = ['colDate', 'colStatus', 'colNote', 'colName', 'encoding'];
+        const inputIds = ['colDate', 'colStatus', 'colNote', 'colName'];
 
-        // Global Data Store
         let globalRawData = [];
         let globalConfig = {};
-        let currentMonthStats = {}; // コピー用に保持
+        let currentMonthStats = {};
 
-        // 初期化：設定をロード
-        window.addEventListener('DOMContentLoaded', () => {
-            loadConfig();
-        });
-
-        // 入力が変わったら設定を保存
-        inputIds.forEach(id => {
-            document.getElementById(id).addEventListener('change', saveConfig);
-        });
+        // Init
+        window.addEventListener('DOMContentLoaded', loadConfig);
+        inputIds.forEach(id => document.getElementById(id).addEventListener('change', saveConfig));
 
         function saveConfig() {
             const config = {};
@@ -145,9 +131,6 @@
             }
         }
 
-        // --- コアロジック ---
-
-        // Helper: Excel Column to Index
         function colLetterToIndex(letter) {
             if (!letter) return -1;
             let column = 0;
@@ -158,30 +141,20 @@
             return column - 1;
         }
 
-        // Drag & Drop
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active')); 
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault(); dropZone.classList.remove('drag-active');
-            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
-        });
-        dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => { if (e.target.files.length) processFile(e.target.files[0]); });
-
-        // Month Selection Change
-        monthSelect.addEventListener('change', () => {
-            updateDashboard(monthSelect.value);
-        });
-
-        // 1. Process File
-        function processFile(file) {
+        // --- Main Action: Load from Sheet ---
+        function loadFromSheet() {
+            // UI Reset
             errorMsg.classList.add('hidden');
             resultArea.classList.add('hidden');
             controlArea.classList.add('hidden');
+            loadBtn.disabled = true;
+            loadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            loader.style.display = 'block';
+            statusMsg.textContent = 'スプレッドシートからデータを取得中...';
 
-            // Save Config current state
             saveConfig();
-            
+
+            // Set Index based on current input
             globalConfig = {
                 dateIdx: colLetterToIndex(document.getElementById('colDate').value.toUpperCase().trim()),
                 statusIdx: colLetterToIndex(document.getElementById('colStatus').value.toUpperCase().trim()),
@@ -189,20 +162,36 @@
                 nameIdx: colLetterToIndex(document.getElementById('colName').value.toUpperCase().trim())
             };
 
-            const encoding = document.getElementById('encoding').value;
-
-            Papa.parse(file, {
-                encoding: encoding,
-                complete: function(results) {
-                    initData(results.data);
-                },
-                error: function(err) {
-                    showError("CSV読み込みエラー: " + err.message);
-                }
-            });
+            // Call GAS
+            google.script.run
+                .withSuccessHandler(onDataSuccess)
+                .withFailureHandler(onDataFailure)
+                .getSheetData();
         }
 
-        // 2. Initialize Data & Extract Months
+        function onDataSuccess(data) {
+            loadBtn.disabled = false;
+            loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            loader.style.display = 'none';
+            statusMsg.textContent = '';
+            
+            if (!data || data.length === 0) {
+                showError("データが見つかりませんでした。シートが空のようです。");
+                return;
+            }
+            
+            initData(data);
+        }
+
+        function onDataFailure(error) {
+            loadBtn.disabled = false;
+            loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            loader.style.display = 'none';
+            statusMsg.textContent = '';
+            showError("データ取得エラー: " + error.message);
+        }
+
+        // Logic (Same as before but handles array data)
         function initData(data) {
             globalRawData = data;
             const months = new Set();
@@ -225,7 +214,7 @@
             });
 
             if (!hasValidData) {
-                showError("「決済完了」かつ「有効な日付」が見つかりません。列設定を確認してください。");
+                showError("「決済完了」かつ「日付」のデータが見つかりませんでした。列の設定を確認してください。");
                 return;
             }
 
@@ -242,28 +231,16 @@
             });
 
             controlArea.classList.remove('hidden');
-            
-            if (monthSelect.options.length > 1) {
-                monthSelect.selectedIndex = 1;
-            }
+            if (monthSelect.options.length > 1) monthSelect.selectedIndex = 1;
             updateDashboard(monthSelect.value);
         }
 
-        // Helper: Flexible Date Parser (Excel Serial Support added)
         function parseDate(str) {
             if (!str) return null;
-            
-            // Excel Serial Number (e.g., 45321)
-            if (!isNaN(str) && Number(str) > 20000) {
-                const excelEpoc = new Date(1899, 11, 30);
-                return new Date(excelEpoc.getTime() + Number(str) * 86400000);
-            }
-
-            // Standard YYYY/MM/DD
+            // standard
             let match = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
             if (match) return new Date(match[1], match[2] - 1, match[3]);
-            
-            // Japanese 1月26日 (Assume current year)
+            // japanese
             match = str.match(/(\d{1,2})月(\d{1,2})日?/);
             if (match) {
                 const now = new Date();
@@ -272,13 +249,16 @@
             return null; 
         }
 
-        // 3. Filter & Analyze
+        monthSelect.addEventListener('change', () => updateDashboard(monthSelect.value));
+
         function updateDashboard(selectedMonth) {
             const counts = {};
             let total = 0;
 
             globalRawData.forEach(row => {
-                if (row.length <= Math.max(globalConfig.statusIdx, globalConfig.dateIdx, globalConfig.nameIdx)) return;
+                // Safety check
+                const maxIdx = Math.max(globalConfig.statusIdx, globalConfig.dateIdx, globalConfig.nameIdx);
+                if (!row || row.length <= maxIdx) return;
 
                 const status = (row[globalConfig.statusIdx] || '').toString();
                 if (!status.includes('決済完了')) return;
@@ -294,9 +274,7 @@
                     if (monthKey !== selectedMonth) return;
                 }
 
-                if (!counts[name]) {
-                    counts[name] = { count: 0, highSplits: [] };
-                }
+                if (!counts[name]) counts[name] = { count: 0, highSplits: [] };
 
                 counts[name].count++;
                 total++;
@@ -305,23 +283,17 @@
                 const splitMatch = note.match(/(\d+)分割/);
                 if (splitMatch) {
                     const splitCount = parseInt(splitMatch[1], 10);
-                    if (splitCount >= 24) {
-                        counts[name].highSplits.push(`${splitCount}分割`);
-                    }
+                    if (splitCount >= 24) counts[name].highSplits.push(`${splitCount}分割`);
                 }
             });
 
             totalCountDisplay.innerHTML = `${total} <span class="text-sm font-normal text-blue-600">本</span>`;
-            
-            // Store for copy function
             currentMonthStats = { month: selectedMonth, total: total, data: counts };
-            
             renderTable(counts, total);
         }
 
         function renderTable(counts, total) {
             resultTableBody.innerHTML = '';
-            
             const sortedData = Object.entries(counts)
                 .map(([name, data]) => ({ name, ...data }))
                 .sort((a, b) => b.count - a.count);
@@ -338,19 +310,16 @@
                         return acc;
                     }, {});
                     const parts = [];
-                    for (const [splitType, count] of Object.entries(splitSummary)) {
-                        parts.push(`${splitType}(${count})`);
-                    }
+                    for (const [splitType, count] of Object.entries(splitSummary)) parts.push(`${splitType}(${count})`);
                     remarksHtml = `<span class="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded inline-block">★内: ${parts.join(', ')}</span>`;
                 }
 
                 let rankDisplay = `<span class="text-gray-500 font-mono">#${rank}</span>`;
                 if (rank === 1) rankDisplay = `<i class="fa-solid fa-crown text-yellow-500 text-lg"></i>`;
-                if (rank === 2) rankDisplay = `<i class="fa-solid fa-crown text-gray-400 text-lg"></i>`;
-                if (rank === 3) rankDisplay = `<i class="fa-solid fa-crown text-orange-400 text-lg"></i>`;
+                else if (rank === 2) rankDisplay = `<i class="fa-solid fa-crown text-gray-400 text-lg"></i>`;
+                else if (rank === 3) rankDisplay = `<i class="fa-solid fa-crown text-orange-400 text-lg"></i>`;
 
-                let barColor = 'bg-blue-500';
-                if (rank === 1) barColor = 'bg-yellow-400';
+                let barColor = rank === 1 ? 'bg-yellow-400' : 'bg-blue-500';
 
                 tr.innerHTML = `
                     <td class="px-6 py-4 whitespace-nowrap text-center font-bold">${rankDisplay}</td>
@@ -369,7 +338,6 @@
                 resultTableBody.appendChild(tr);
                 rank++;
             });
-
             resultArea.classList.remove('hidden');
         }
 
@@ -378,10 +346,8 @@
             errorMsg.classList.remove('hidden');
         }
 
-        // チャット報告用に整形してコピー (テキスト形式)
         function copyTextSummary() {
             if (!currentMonthStats.data) return;
-
             const d = new Date();
             const timeStr = `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
             const m = currentMonthStats.month === 'all' ? '全期間' : currentMonthStats.month;
@@ -389,7 +355,6 @@
             let text = `【営業集計速報】 ${m}\n`;
             text += `実行: ${timeStr} / 全体: ${currentMonthStats.total}本\n`;
             text += `------------------------\n`;
-
             const sorted = Object.entries(currentMonthStats.data)
                 .map(([name, data]) => ({ name, ...data }))
                 .sort((a, b) => b.count - a.count);
@@ -397,8 +362,6 @@
             sorted.forEach((item, index) => {
                 const rank = index + 1;
                 const emoji = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : `#${rank}`));
-                
-                // 特記事項
                 let remarks = "";
                 if (item.highSplits.length > 0) {
                      const summary = {};
@@ -407,14 +370,11 @@
                      for (let k in summary) parts.push(`${k}x${summary[k]}`);
                      remarks = ` (★ ${parts.join(', ')})`;
                 }
-
                 text += `${emoji} ${item.name} : ${item.count}本${remarks}\n`;
             });
-            
             text += `------------------------`;
-
             navigator.clipboard.writeText(text).then(() => {
-                alert('チャット用のテキスト形式でコピーしました！\nSlackやLINEに貼り付けられます。');
+                alert('チャット用のテキスト形式でコピーしました！');
             });
         }
     </script>
